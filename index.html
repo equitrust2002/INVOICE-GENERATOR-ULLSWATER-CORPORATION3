@@ -11,19 +11,12 @@
         
         body { 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif; 
-            background: var(--bg); 
-            margin: 0; 
-            padding: 10px;
+            background: var(--bg); margin: 0; padding: 10px;
         }
         
         .form-container { 
-            width: 100%; 
-            max-width: 210mm; 
-            min-height: 297mm; 
-            background: white; 
-            margin: 0 auto; 
-            padding: 10mm; 
-            border: 1px solid #ccc;
+            width: 100%; max-width: 210mm; min-height: 297mm; background: white; 
+            margin: 0 auto; padding: 10mm; border: 1px solid #ccc;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
 
@@ -56,12 +49,6 @@
             body { background: white; padding: 0; }
             .form-container { border: none; box-shadow: none; margin: 0; padding: 5mm; width: 100%; }
         }
-
-        @media (max-width: 600px) {
-            .footer-grid { grid-template-columns: 1fr; }
-            .header { flex-direction: column; text-align: center; }
-            #qrcode-container { width: 160px; }
-        }
     </style>
 </head>
 <body>
@@ -72,7 +59,7 @@
             <input type="text" id="corpName" class="corp-title" value="ULLSWATER CORPORATION" oninput="saveData()">
             <input type="text" id="corpSub" value="OFFICIAL INVOICE" style="letter-spacing: 3px; font-weight: bold;" oninput="saveData()">
             <div style="margin-top: 15px; font-weight: bold; display: flex; align-items: center; gap: 5px;">
-                INV: <input type="text" id="invNo" style="border-bottom: 2px solid var(--primary); font-weight: bold;" placeholder="ULW-XXXX-XXX" oninput="saveData()">
+                INV: <input type="text" id="invNo" style="border-bottom: 2px solid var(--primary); font-weight: bold; color: #c0392b;" placeholder="AUTO-GENERATING..." oninput="saveData()">
             </div>
         </div>
         <div id="qrcode-container">
@@ -144,6 +131,14 @@
 <script>
     let qrTimeout;
 
+    // --- AUTO GENERATE INVOICE NUMBER ---
+    function generateInvNumber() {
+        const now = new Date();
+        const datePart = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0');
+        const randPart = Math.random().toString(36).substring(2, 5).toUpperCase();
+        return `ULW-${datePart}-${randPart}`;
+    }
+
     function addRow(src="", d="", q=1, p=0) {
         const tbody = document.getElementById('invBody');
         const tr = document.createElement('tr');
@@ -196,14 +191,10 @@
         clearTimeout(qrTimeout);
         qrTimeout = setTimeout(() => {
             const d = getFormData();
-            
-            // EXACT TEXT MIRRORING - Every entry included
             let mirror = `${d.corp}\nINV: ${d.inv}\nDATE: ${d.date}\nTIN: ${d.tin}\n`;
             mirror += `CLIENT: ${d.client.replace(/\n/g, ' ')}\n`;
             mirror += `---ITEMS---\n`;
-            d.items.forEach(i => {
-                mirror += `[${i.src}] ${i.d}: ${i.q}x${i.p}=${i.total}\n`;
-            });
+            d.items.forEach(i => { mirror += `[${i.src}] ${i.d}: ${i.q}x${i.p}=${i.total}\n`; });
             mirror += `-----------\n`;
             mirror += `NOTES: ${d.notes.replace(/\n/g, ' ')}\n`;
             mirror += `TOTAL: PHP ${d.total}\n`;
@@ -211,13 +202,7 @@
 
             const qrDiv = document.getElementById("qrcode");
             qrDiv.innerHTML = ""; 
-            // Using Level L for maximum data capacity (up to 2,953 characters)
-            new QRCode(qrDiv, { 
-                text: mirror, 
-                width: 170, 
-                height: 170, 
-                correctLevel: QRCode.CorrectLevel.L 
-            });
+            new QRCode(qrDiv, { text: mirror, width: 170, height: 170, correctLevel: QRCode.CorrectLevel.L });
         }, 1000);
     }
 
@@ -237,7 +222,7 @@
 
     function applyData(data) {
         document.getElementById('corpName').value = data.corp || "ULLSWATER CORPORATION";
-        document.getElementById('invNo').value = data.inv || "";
+        document.getElementById('invNo').value = data.inv || generateInvNumber(); // Respect saved ID or generate
         document.getElementById('invDate').value = data.date || "";
         document.getElementById('clientTin').value = data.tin || "";
         document.getElementById('clientName').value = data.client || "";
@@ -251,7 +236,7 @@
     function saveJSON() {
         const d = getFormData();
         const blob = new Blob([JSON.stringify(d, null, 2)], { type: 'application/json' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ULLSWATER_${d.inv || 'DRAFT'}.json`; a.click();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${d.inv || 'DRAFT'}.json`; a.click();
     }
 
     function exportCSV() {
@@ -261,7 +246,7 @@
             csv += `"${d.corp}","${d.inv}","${d.date}","${d.tin}","${d.client.replace(/\n/g, ' ')}","${i.src}","${i.d}","${i.q}","${i.p}","${i.total}","${d.total}"\n`;
         });
         const blob = new Blob([csv], { type: 'text/csv' });
-        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `ULLSWATER_${d.inv}.csv`; a.click();
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `${d.inv}.csv`; a.click();
     }
 
     function clearForm() { 
@@ -273,7 +258,13 @@
 
     window.onload = () => {
         const saved = JSON.parse(localStorage.getItem('ULLSWATER_SYSTEM_DATA'));
-        if(saved) applyData(saved); else { addRow(); document.getElementById('invDate').valueAsDate = new Date(); }
+        if(saved) {
+            applyData(saved);
+        } else {
+            document.getElementById('invNo').value = generateInvNumber(); // Auto-generate for fresh start
+            addRow(); 
+            document.getElementById('invDate').valueAsDate = new Date(); 
+        }
     };
 </script>
 </body>
